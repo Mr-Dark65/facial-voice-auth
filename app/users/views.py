@@ -154,3 +154,17 @@ class UserListView(generics.ListAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAdminUser]
+
+
+class AuthenticationAttemptListView(generics.ListAPIView):
+    """
+    Vista para ver historial de intentos de autenticación del usuario.
+    GET /api/users/auth-attempts/
+    """
+    serializer_class = AuthenticationAttemptSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return AuthenticationAttempt.objects.filter(user=self.request.user)
+
+
