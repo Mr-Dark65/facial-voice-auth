@@ -168,3 +168,20 @@ class AuthenticationAttemptListView(generics.ListAPIView):
         return AuthenticationAttempt.objects.filter(user=self.request.user)
 
 
+class UserDeleteView(generics.DestroyAPIView):
+    """
+    Vista para eliminar cuenta de usuario.
+    DELETE /api/users/delete/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_object(self):
+        return self.request.user
+    
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        user.delete()
+        
+        return Response({
+            'message': 'Cuenta eliminada exitosamente'
+        }, status=status.HTTP_204_NO_CONTENT)
