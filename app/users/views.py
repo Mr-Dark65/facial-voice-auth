@@ -64,3 +64,19 @@ class LoginView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class LogoutView(APIView):
+    """
+    Vista para cerrar sesión.
+    POST /api/users/logout/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        # Eliminar el token del usuario
+        request.user.auth_token.delete()
+        logout(request)
+        
+        return Response({
+            'message': 'Sesión cerrada exitosamente'
+        }, status=status.HTTP_200_OK)
+
