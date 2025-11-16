@@ -134,3 +134,23 @@ class ChangePasswordView(APIView):
         }, status=status.HTTP_200_OK)
 
 
+class BiometricStatusView(APIView):
+    """
+    Vista para consultar el estado de registro biométrico del usuario.
+    GET /api/users/biometric-status/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        serializer = BiometricStatusSerializer(request.user)
+        return Response(serializer.data)
+
+
+class UserListView(generics.ListAPIView):
+    """
+    Vista para listar usuarios (solo admin).
+    GET /api/users/list/
+    """
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAdminUser]
