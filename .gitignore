@@ -1,10 +1,64 @@
+# Python
 *.py[cod]
-__pycache__/
+*$py.class
 *.so
-*.egg
+.Python
+__pycache__/
 *.egg-info/
 dist/
 build/
+*.egg
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+/media
+/staticfiles
+
+# Environment variables
+.env
+.venv
 venv/
+ENV/
 env/
-.venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models y datasets (muy pesados para git)
+models_storage/*.h5
+models_storage/*.pkl
+models_storage/*.pth
+dataset/faces/*
+dataset/voices/*
+!dataset/faces/.gitkeep
+!dataset/voices/.gitkeep
+
+# Media files
+media/face_images/*
+media/voice_samples/*
+media/auth_attempts/*
+!media/face_images/.gitkeep
+!media/voice_samples/.gitkeep
+!media/auth_attempts/.gitkeep
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+.gitkeep
