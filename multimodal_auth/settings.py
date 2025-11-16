@@ -40,11 +40,21 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    # Third-party apps
+    'rest_framework',
+    'rest_framework.authtoken',
+    'corsheaders',
+    
+    # Local apps
+    'app.users',
+    'app.face_recognition',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -57,7 +67,7 @@ ROOT_URLCONF = 'multimodal_auth.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -122,8 +132,69 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Media files (uploaded content)
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Custom User Model
+AUTH_USER_MODEL = 'users.User'
+
+# REST Framework configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
+}
+
+# CORS configuration
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+# Biometric authentication settings
+FACE_RECOGNITION_THRESHOLD = 0.6  # Umbral de confianza para reconocimiento facial
+VOICE_RECOGNITION_THRESHOLD = 0.6  # Umbral de confianza para reconocimiento de voz
+MULTIMODAL_THRESHOLD = 0.7  # Umbral de confianza combinada
+
+# Face registration settings
+MIN_FACE_IMAGES = 5  # Mínimo de imágenes para registro facial
+MAX_FACE_IMAGES = 10  # Máximo de imágenes para registro facial
+
+# Voice registration settings
+MIN_VOICE_SAMPLES = 3  # Mínimo de muestras de voz
+MAX_VOICE_SAMPLES = 5  # Máximo de muestras de voz
+VOICE_SAMPLE_DURATION = 3  # Duración en segundos de cada muestra
+
+# Model storage paths
+MODELS_STORAGE_DIR = BASE_DIR / 'models_storage'
+FACE_MODEL_PATH = MODELS_STORAGE_DIR / 'face_model.h5'
+VOICE_MODEL_PATH = MODELS_STORAGE_DIR / 'voice_model.h5'
+FUSION_MODEL_PATH = MODELS_STORAGE_DIR / 'fusion_model.h5'
+
+# Dataset paths
+DATASET_DIR = BASE_DIR / 'dataset'
+FACE_DATASET_DIR = DATASET_DIR / 'faces'
+VOICE_DATASET_DIR = DATASET_DIR / 'voices'
