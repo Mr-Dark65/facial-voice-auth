@@ -119,3 +119,45 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Retorna el directorio donde se guardan las muestras de voz del usuario."""
         return os.path.join('media', 'voice_samples', str(self.id))
 
+
+class AuthenticationAttempt(models.Model):
+    """
+    Modelo para registrar intentos de autenticación.
+    Útil para auditoría y seguridad.
+    """
+    STATUS_CHOICES = [
+        ('success', 'Exitoso'),
+        ('failed_face', 'Fallo en reconocimiento facial'),
+        ('failed_voice', 'Fallo en reconocimiento de voz'),
+        ('failed_both', 'Fallo en ambos'),
+        ('failed_user', 'Usuario no encontrado'),
+    ]
+    
+    user = models.ForeignKey(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='auth_attempts',
+        null=True,
+        blank=True,
+        verbose_name='Usuario'
+    )
+    email_attempted = models.EmailField(verbose_name='Email intentado')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, verbose_name='Estado')
+    
+    # Scores de confianza
+    face_confidence = models.FloatField(null=True, blank=True, verbose_name='Confianza facial')
+    voice_confidence = models.FloatField(null=True, blank=True, verbose_name='Confianza de voz')
+    combined_confidence = models.FloatField(null=True, blank=True, verbose_name='Confianza combinada')
+    
+    # Metadata
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name='Dirección IP')
+    user_agent = models.TextField(blank=True, verbose_name='User Agent')
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name='Fecha y hora')
+    
+    class Meta:
+        verbose_name = 'Intento de autenticación'
+        verbose_name_plural = 'Intentos de autenticación'
+        ordering = ['-timestamp']
+    
+    def __str__(self):
+        return f"{self.email_attempted} - {self.status} - {self.timestamp}"
