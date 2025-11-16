@@ -12,29 +12,12 @@ class FaceDetector:
     Detector de rostros usando MTCNN (Multi-task Cascaded Convolutional Networks).
     Detecta rostros y puntos faciales clave en imágenes.
     """
-    
     def __init__(self, min_confidence=0.9):
-        """
-        Inicializa el detector de rostros.
-        
-        Args:
-            min_confidence (float): Confianza mínima para aceptar una detección (0-1)
-        """
         self.detector = MTCNN()
         self.min_confidence = min_confidence
         logger.info(f"FaceDetector inicializado con confianza mínima: {min_confidence}")
     
     def detect_face(self, image_path=None, image_array=None):
-        """
-        Detecta rostros en una imagen.
-        
-        Args:
-            image_path (str): Ruta a la imagen
-            image_array (np.array): Array numpy de la imagen
-        
-        Returns:
-            dict: Información de la detección o None si no se detecta rostro
-        """
         try:
             # Cargar imagen
             if image_path:
@@ -78,17 +61,6 @@ class FaceDetector:
             return None
     
     def extract_face(self, image_path=None, image_array=None, target_size=(160, 160)):
-        """
-        Extrae y recorta el rostro de una imagen.
-        
-        Args:
-            image_path (str): Ruta a la imagen
-            image_array (np.array): Array numpy de la imagen
-            target_size (tuple): Tamaño objetivo para el rostro extraído
-        
-        Returns:
-            np.array: Imagen del rostro recortado y redimensionado, o None
-        """
         try:
             # Cargar imagen
             if image_path:
@@ -129,16 +101,6 @@ class FaceDetector:
             return None
     
     def validate_face_quality(self, image_path=None, image_array=None):
-        """
-        Valida la calidad de una imagen facial.
-        
-        Args:
-            image_path (str): Ruta a la imagen
-            image_array (np.array): Array numpy de la imagen
-        
-        Returns:
-            dict: Información de validación con score de calidad
-        """
         detection = self.detect_face(image_path=image_path, image_array=image_array)
         
         if detection is None:
@@ -177,16 +139,6 @@ class FaceDetector:
         }
     
     def detect_multiple_faces(self, image_path=None, image_array=None):
-        """
-        Detecta todos los rostros en una imagen.
-        
-        Args:
-            image_path (str): Ruta a la imagen
-            image_array (np.array): Array numpy de la imagen
-        
-        Returns:
-            list: Lista de detecciones de rostros
-        """
         try:
             # Cargar imagen
             if image_path:
