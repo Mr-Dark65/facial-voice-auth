@@ -109,3 +109,28 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         })
 
 
+class ChangePasswordView(APIView):
+    """
+    Vista para cambiar contraseña.
+    POST /api/users/change-password/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        
+        user = request.user
+        user.set_password(serializer.validated_data['new_password'])
+        user.save()
+        
+        # Regenerar token
+        Token.objects.filter(user=user).delete()
+        token = Token.objects.create(user=user)
+        
+        return Response({
+            'message': 'Contraseña cambiada exitosamente',
+            'token': token.key
+        }, status=status.HTTP_200_OK)
+
+
