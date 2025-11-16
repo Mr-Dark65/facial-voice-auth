@@ -80,3 +80,32 @@ class LogoutView(APIView):
             'message': 'Sesión cerrada exitosamente'
         }, status=status.HTTP_200_OK)
 
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    """
+    Vista para ver y actualizar el perfil del usuario autenticado.
+    GET/PUT /api/users/profile/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        if self.request.method == 'PUT' or self.request.method == 'PATCH':
+            return UserUpdateSerializer
+        return UserSerializer
+    
+    def get_object(self):
+        return self.request.user
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        return Response({
+            'message': 'Perfil actualizado exitosamente',
+            'user': UserSerializer(instance).data
+        })
+
+
