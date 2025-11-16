@@ -24,7 +24,7 @@ urlpatterns = [
     
     # API endpoints
     path('api/users/', include('app.users.urls')),
-    # path('api/face/', include('app.face_recognition.urls')),  # Se agregará después
+    path('api/face/', include('app.face_recognition.urls')),
     # path('api/voice/', include('app.voice_recognition.urls')),  # Se agregará después
     # path('api/multimodal/', include('app.multimodal.urls')),  # Se agregará después
 ]
