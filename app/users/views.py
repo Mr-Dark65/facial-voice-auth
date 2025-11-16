@@ -35,3 +35,32 @@ class UserRegistrationView(generics.CreateAPIView):
             'token': token.key
         }, status=status.HTTP_201_CREATED)
 
+
+class LoginView(APIView):
+    """
+    Vista para login tradicional (con email y password).
+    POST /api/users/login/
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        
+        user = serializer.validated_data['user']
+        
+        # Actualizar último login
+        user.last_login = timezone.now()
+        user.save(update_fields=['last_login'])
+        
+        # Crear o recuperar token
+        token, created = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            'message': 'Login exitoso',
+            'user': UserSerializer(user).data,
+            'token': token.key,
+            'biometric_status': BiometricStatusSerializer(user).data
+        }, status=status.HTTP_200_OK)
+
+
