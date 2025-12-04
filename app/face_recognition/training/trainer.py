@@ -23,50 +23,74 @@ class FaceCNNModel:
     Modelo basado en capas convolucionales para extraer características faciales.
     """
     @staticmethod
+    def residual_block(x, filters, name_prefix):
+        """Bloque residual para mejor gradiente y profundidad"""
+        shortcut = x
+        
+        # Primera convolución
+        x = layers.Conv2D(filters, (3, 3), padding='same', name=f'{name_prefix}_conv1')(x)
+        x = layers.BatchNormalization(name=f'{name_prefix}_bn1')(x)
+        x = layers.Activation('relu', name=f'{name_prefix}_relu1')(x)
+        
+        # Segunda convolución
+        x = layers.Conv2D(filters, (3, 3), padding='same', name=f'{name_prefix}_conv2')(x)
+        x = layers.BatchNormalization(name=f'{name_prefix}_bn2')(x)
+        
+        # Ajustar shortcut si es necesario
+        if shortcut.shape[-1] != filters:
+            shortcut = layers.Conv2D(filters, (1, 1), padding='same', name=f'{name_prefix}_shortcut')(shortcut)
+        
+        # Conexión residual
+        x = layers.Add(name=f'{name_prefix}_add')([x, shortcut])
+        x = layers.Activation('relu', name=f'{name_prefix}_relu2')(x)
+        
+        return x
+    
+    @staticmethod
     def build_model(input_shape=(160, 160, 3), num_classes=10, embedding_size=128):
         # Input layer
         inputs = layers.Input(shape=input_shape, name='input_image')
         
-        # Bloque 1
-        x = layers.Conv2D(32, (3, 3), activation='relu', padding='same', name='conv1_1')(inputs)
-        x = layers.BatchNormalization(name='bn1_1')(x)
-        x = layers.Conv2D(32, (3, 3), activation='relu', padding='same', name='conv1_2')(x)
-        x = layers.BatchNormalization(name='bn1_2')(x)
+        # Stem: Convolución inicial
+        x = layers.Conv2D(32, (7, 7), strides=2, padding='same', name='stem_conv')(inputs)
+        x = layers.BatchNormalization(name='stem_bn')(x)
+        x = layers.Activation('relu', name='stem_relu')(x)
+        x = layers.MaxPooling2D((3, 3), strides=2, padding='same', name='stem_pool')(x)
+        
+        # Bloque 1: 64 filtros
+        x = FaceCNNModel.residual_block(x, 64, 'block1_res1')
+        x = FaceCNNModel.residual_block(x, 64, 'block1_res2')
         x = layers.MaxPooling2D((2, 2), name='pool1')(x)
-        x = layers.Dropout(0.25, name='dropout1')(x)
+        x = layers.Dropout(0.3, name='dropout1')(x)
         
-        # Bloque 2
-        x = layers.Conv2D(64, (3, 3), activation='relu', padding='same', name='conv2_1')(x)
-        x = layers.BatchNormalization(name='bn2_1')(x)
-        x = layers.Conv2D(64, (3, 3), activation='relu', padding='same', name='conv2_2')(x)
-        x = layers.BatchNormalization(name='bn2_2')(x)
+        # Bloque 2: 128 filtros
+        x = FaceCNNModel.residual_block(x, 128, 'block2_res1')
+        x = FaceCNNModel.residual_block(x, 128, 'block2_res2')
         x = layers.MaxPooling2D((2, 2), name='pool2')(x)
-        x = layers.Dropout(0.25, name='dropout2')(x)
+        x = layers.Dropout(0.3, name='dropout2')(x)
         
-        # Bloque 3
-        x = layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='conv3_1')(x)
-        x = layers.BatchNormalization(name='bn3_1')(x)
-        x = layers.Conv2D(128, (3, 3), activation='relu', padding='same', name='conv3_2')(x)
-        x = layers.BatchNormalization(name='bn3_2')(x)
+        # Bloque 3: 256 filtros
+        x = FaceCNNModel.residual_block(x, 256, 'block3_res1')
+        x = FaceCNNModel.residual_block(x, 256, 'block3_res2')
         x = layers.MaxPooling2D((2, 2), name='pool3')(x)
-        x = layers.Dropout(0.25, name='dropout3')(x)
+        x = layers.Dropout(0.4, name='dropout3')(x)
         
-        # Bloque 4
-        x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='conv4_1')(x)
-        x = layers.BatchNormalization(name='bn4_1')(x)
-        x = layers.Conv2D(256, (3, 3), activation='relu', padding='same', name='conv4_2')(x)
-        x = layers.BatchNormalization(name='bn4_2')(x)
-        x = layers.MaxPooling2D((2, 2), name='pool4')(x)
-        x = layers.Dropout(0.25, name='dropout4')(x)
+        # Global Average Pooling en lugar de Flatten
+        x = layers.GlobalAveragePooling2D(name='global_pool')(x)
         
-        # Flatten y capas densas
-        x = layers.Flatten(name='flatten')(x)
-        x = layers.Dense(512, activation='relu', name='fc1')(x)
+        # Capas densas con L2 regularization
+        x = layers.Dense(512, activation='relu', 
+                        kernel_regularizer=keras.regularizers.l2(0.001),
+                        name='fc1')(x)
         x = layers.BatchNormalization(name='bn_fc1')(x)
         x = layers.Dropout(0.5, name='dropout_fc1')(x)
         
-        # Embedding layer
-        embedding = layers.Dense(embedding_size, activation='relu', name='embedding')(x)
+        # Embedding layer con normalización L2
+        embedding = layers.Dense(embedding_size, activation=None, 
+                                kernel_regularizer=keras.regularizers.l2(0.001),
+                                name='embedding')(x)
+        embedding = layers.Lambda(lambda x: tf.math.l2_normalize(x, axis=1), 
+                                 name='embedding_normalized')(embedding)
         x = layers.BatchNormalization(name='bn_embedding')(embedding)
         x = layers.Dropout(0.5, name='dropout_embedding')(x)
         
