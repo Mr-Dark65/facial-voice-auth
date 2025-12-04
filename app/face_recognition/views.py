@@ -1,7 +1,10 @@
+from django.views.generic import TemplateView
 from django.shortcuts import render
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.conf import settings
 from django.utils import timezone
 from PIL import Image
@@ -16,7 +19,7 @@ from .serializers import (
     FaceImageSerializer, FaceImageUploadSerializer, FaceRegistrationSerializer,
     FaceVerificationSerializer, FaceRecognitionSerializer,
     FaceRecognitionModelSerializer, TrainModelSerializer,
-    DatasetStatsSerializer, FaceEmbeddingSerializer
+    DatasetStatsSerializer, FaceEmbeddingSerializer, FaceRegistrationVideoSerializer
 )
 from .preprocessing.detector import FaceDetector
 from .preprocessing.transformer import FaceTransformer
@@ -24,9 +27,129 @@ from .training.dataset_manager import FaceDatasetManager
 from .training.trainer import FaceRecognitionTrainer
 from .inference.predictor import FaceRecognitionPredictor
 from app.users.models import User
+import tempfile
+from django.core.files.base import ContentFile
+import os
 
 logger = logging.getLogger(__name__)
+class RegisterFaceFromVideoView(APIView):
+    """
+    Vista para registrar imágenes faciales a partir de un video.
+    POST /api/face/register-video/
+    """
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request):
+        serializer = FaceRegistrationVideoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        video_file = serializer.validated_data['video']
+        detector = FaceDetector()
+        dataset_manager = FaceDatasetManager()
+
+        # Guardar el video temporalmente
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_video:
+            for chunk in video_file.chunks():
+                temp_video.write(chunk)
+            temp_video_path = temp_video.name
+
+        cap = cv2.VideoCapture(temp_video_path)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_interval = max(int(fps), 5)  # Extraer 1 frame por segundo o cada 5 frames mínimo
+
+        successful_uploads = []
+        failed_uploads = []
+        idx = 0
+        saved_images = 0
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if idx % frame_interval != 0:
+                idx += 1
+                continue
+
+            # Convertir a RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            validation = detector.validate_face_quality(image_array=frame_rgb)
+
+            if not validation['is_valid']:
+                failed_uploads.append({
+                    'frame': idx,
+                    'reason': validation['message']
+                })
+                idx += 1
+                continue
+
+            face = detector.extract_face(image_array=frame_rgb)
+            if face is None:
+                failed_uploads.append({
+                    'frame': idx,
+                    'reason': 'No se pudo extraer el rostro'
+                })
+                idx += 1
+                continue
+
+            # Guardar en base de datos
+            # Convertir el frame a imagen JPEG en memoria
+            is_success, buffer = cv2.imencode(".jpg", cv2.cvtColor(face, cv2.COLOR_RGB2BGR))
+            if not is_success:
+                failed_uploads.append({
+                    'frame': idx,
+                    'reason': 'No se pudo codificar la imagen'
+                })
+                idx += 1
+                continue
+            image_content = ContentFile(buffer.tobytes(), name=f"video_face_{request.user.id}_{idx}.jpg")
+
+            face_image = FaceImage.objects.create(
+                user=request.user,
+                image=image_content,
+                is_valid=True,
+                quality_score=validation['quality_score'],
+                face_detected=True,
+                processed_at=timezone.now()
+            )
+
+            dataset_manager.save_face_image(
+                user_id=request.user.id,
+                image=face,
+                image_name=f"face_{face_image.id}.jpg"
+            )
+
+            successful_uploads.append({
+                'frame': idx,
+                'id': face_image.id,
+                'quality_score': validation['quality_score']
+            })
+            saved_images += 1
+            idx += 1
+
+        cap.release()
+        os.remove(temp_video_path)
+
+        # Actualizar usuario
+        total_images = FaceImage.objects.filter(
+            user=request.user,
+            is_valid=True
+        ).count()
+        request.user.face_images_count = total_images
+        if total_images >= settings.MIN_FACE_IMAGES:
+            request.user.face_registered = True
+        request.user.save()
+
+        return Response({
+            'message': f'{saved_images} imágenes extraídas y registradas exitosamente',
+            'successful_uploads': successful_uploads,
+            'failed_uploads': failed_uploads,
+            'total_images': total_images,
+            'face_registered': request.user.face_registered
+        }, status=status.HTTP_201_CREATED)
+        
+class FaceVerificationVideoView(TemplateView):
+    template_name = 'face_verification_video.html'
 
 class UploadFaceImageView(APIView):
     """
@@ -304,6 +427,8 @@ class TrainFaceModelView(APIView):
             metadata = model_info['metadata']
             training_info = metadata.get('training', {})
             
+            # Eliminar modelo anterior con el mismo nombre (si existe)
+            FaceRecognitionModel.objects.filter(name=metadata['model_name']).delete()
             face_model = FaceRecognitionModel.objects.create(
                 name=metadata['model_name'],
                 version=version,
@@ -353,6 +478,7 @@ class DatasetStatsView(APIView):
         return Response(serializer.data)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class FaceRecognitionView(APIView):
     """
     Vista para reconocer un rostro (identificación).
@@ -361,11 +487,19 @@ class FaceRecognitionView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request):
-        serializer = FaceRecognitionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        image_file = serializer.validated_data['image']
-        
+        import logging
+        logger = logging.getLogger('django')
+        logger.debug(f"[DEBUG] request.data: {request.data}")
+        logger.debug(f"[DEBUG] request.FILES: {request.FILES}")
+        try:
+            serializer = FaceRecognitionSerializer(data=request.data)
+            if not serializer.is_valid():
+                logger.error(f"[DEBUG] serializer.errors: {serializer.errors}")
+                return Response({'error': serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+            image_file = serializer.validated_data['image']
+        except Exception as e:
+            logger.error(f"[DEBUG] Error en validación inicial: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         try:
             # Convertir imagen
             image_bytes = image_file.read()
@@ -386,7 +520,7 @@ class FaceRecognitionView(APIView):
             
             if not result['success']:
                 return Response(result, status=status.HTTP_400_BAD_REQUEST)
-            
+
             # Obtener información del usuario
             user_data = None
             if result['user_id']:
@@ -399,12 +533,15 @@ class FaceRecognitionView(APIView):
                         'full_name': user.get_full_name()
                     }
                 except User.DoesNotExist:
-                    pass
-            
-            return Response({
-                **result,
-                'user': user_data
-            })
+                    user_data = None
+
+            response_data = {**result}
+            if user_data:
+                response_data['user'] = user_data
+            else:
+                response_data['user'] = None
+
+            return Response(response_data)
             
         except Exception as e:
             logger.error(f"Error en reconocimiento: {str(e)}")
