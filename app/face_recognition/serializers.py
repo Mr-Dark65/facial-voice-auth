@@ -137,4 +137,47 @@ class FaceEmbeddingSerializer(serializers.Serializer):
         child=serializers.FloatField(),
         read_only=True
     )
+
+
+class FaceVideoUploadSerializer(serializers.Serializer):
+    """
+    Serializer para la subida de un video para el registro facial.
+    """
+    video = serializers.FileField(required=True)
+
+    def validate_video(self, value):
+        """
+        Valida el archivo de video.
+        """
+        # Límite de 50MB
+        if value.size > 50 * 1024 * 1024:
+            raise serializers.ValidationError("El video no debe superar los 50MB.")
+
+        # Validar tipo de contenido
+        valid_content_types = ['video/mp4', 'video/quicktime']
+        if value.content_type not in valid_content_types:
+            raise serializers.ValidationError(f"Formato de video no soportado: {value.content_type}. Sube un MP4 o MOV.")
+
+        return value
+
+
+class FaceRegistrationVideoSerializer(serializers.Serializer):
+    """
+    Serializer para registrar un rostro a partir de un video.
+    """
+    video = serializers.FileField(required=True)
+
+    def validate_video(self, value):
+        # Límite de 50MB
+        if value.size > 50 * 1024 * 1024:
+            raise serializers.ValidationError("El video no debe superar 50MB")
+
+        # Validar formato
+        valid_formats = ['video/mp4']
+        if value.content_type not in valid_formats:
+            raise serializers.ValidationError(
+                "Formato no válido. Use MP4"
+            )
+
+        return value
     dimension = serializers.IntegerField(read_only=True)
