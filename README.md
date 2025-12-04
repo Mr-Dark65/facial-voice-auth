@@ -1,3 +1,12 @@
+## Cómo ejecutar Daphne correctamente en Windows
+
+Antes de ejecutar Daphne, debes exportar la variable de entorno `DJANGO_SETTINGS_MODULE` para que Django pueda encontrar la configuración:
+
+```powershell
+$env:DJANGO_SETTINGS_MODULE="multimodal_auth.settings"; daphne -b 0.0.0.0 -p 8000 multimodal_auth.asgi:application
+```
+
+Esto evitará el error de configuración de Django.
 # Sistema de Autenticación Multimodal
 
 Sistema de autenticación biométrica usando reconocimiento facial y de voz con Django y modelos propios (no preentrenados).

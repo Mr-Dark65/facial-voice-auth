@@ -11,6 +11,7 @@ from ..preprocessing.detector import FaceDetector
 from ..preprocessing.transformer import FaceTransformer
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)  # Solo advertencias y errores
 
 
 class FaceRecognitionPredictor:
@@ -30,6 +31,15 @@ class FaceRecognitionPredictor:
         # Componentes
         self.face_detector = FaceDetector()
         self.face_transformer = FaceTransformer()
+        
+        # Suavizado temporal para video
+        self.prediction_history = []
+        self.history_size = 5
+        
+        # Umbral adaptativo (muy permisivo para desarrollo)
+        self.base_threshold = 0.15  # Umbral muy bajo para aceptar casi todas las predicciones
+        self.medium_confidence_threshold = 0.40
+        self.high_confidence_threshold = 0.65
         
         # Cargar modelo si se proporciona
         if model_path:
@@ -136,11 +146,47 @@ class FaceRecognitionPredictor:
             'all_probabilities': predictions[0].tolist()
         }
     
-    def recognize_face_from_image(self, image_path=None, image_array=None):
+    def smooth_predictions(self, prediction):
+        """Suaviza predicciones en el tiempo para video en tiempo real"""
+        self.prediction_history.append(prediction)
+        
+        # Mantener solo las últimas N predicciones
+        if len(self.prediction_history) > self.history_size:
+            self.prediction_history.pop(0)
+        
+        # Si no hay suficiente historial, retornar predicción actual
+        if len(self.prediction_history) < 3:
+            return prediction
+        
+        # Contar votos por user_id
+        from collections import Counter
+        user_ids = [p['user_id'] for p in self.prediction_history if p.get('user_id')]
+        
+        if not user_ids:
+            return prediction
+        
+        # Usuario más frecuente
+        vote_counts = Counter(user_ids)
+        most_common_user = vote_counts.most_common(1)[0][0]
+        
+        # Promedio de confianza para ese usuario
+        confidences = [p['confidence'] for p in self.prediction_history 
+                      if p.get('user_id') == most_common_user]
+        avg_confidence = np.mean(confidences) if confidences else prediction['confidence']
+        
+        return {
+            'user_id': most_common_user,
+            'confidence': float(avg_confidence),
+            'class_index': prediction['class_index'],
+            'smoothed': True
+        }
+    
+    def recognize_face_from_image(self, image_path=None, image_array=None, use_temporal_smoothing=False):
         # Detectar y extraer rostro
         face = self.face_detector.extract_face(
             image_path=image_path,
-            image_array=image_array
+            image_array=image_array,
+            align=True
         )
         
         if face is None:
@@ -157,10 +203,32 @@ class FaceRecognitionPredictor:
         # Predecir
         prediction = self.predict_class(face_processed)
         
+        # Aplicar umbral adaptativo (más flexible)
+        if prediction['confidence'] < self.base_threshold:
+            return {
+                'success': False,
+                'message': f'Confianza muy baja ({prediction["confidence"]*100:.1f}%). No se puede identificar',
+                'user_id': None,
+                'confidence': prediction['confidence']
+            }
+        
+        # Suavizado temporal si está habilitado
+        if use_temporal_smoothing:
+            prediction = self.smooth_predictions(prediction)
+        
+        # Clasificar nivel de confianza
+        if prediction['confidence'] >= self.high_confidence_threshold:
+            confidence_level = 'alta'
+        elif prediction['confidence'] >= self.medium_confidence_threshold:
+            confidence_level = 'media'
+        else:
+            confidence_level = 'baja'
+        
         return {
             'success': True,
             'user_id': prediction['user_id'],
             'confidence': prediction['confidence'],
+            'confidence_level': confidence_level,
             'class_index': prediction['class_index'],
             'message': 'Rostro reconocido exitosamente'
         }
