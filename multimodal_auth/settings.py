@@ -23,12 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+l&g0n2sdg$nc!x#a%2566#zn$i8409qtt!6z54vo$f*iqqjd0'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-+l&g0n2sdg$nc!x#a%2566#zn$i8409qtt!6z54vo$f*iqqjd0')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -150,8 +150,8 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Media files (uploaded content)
-MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.environ.get('MEDIA_ROOT', str(BASE_DIR / 'media'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -177,27 +177,28 @@ REST_FRAMEWORK = {
     ],
 }
 
-# ============= CSRF CONFIGURATION (DESARROLLO) =============
-CSRF_COOKIE_SECURE = False
-CSRF_COOKIE_HTTPONLY = False
-SESSION_COOKIE_SECURE = False
+# ============= CSRF CONFIGURATION =============
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-]
+# Agrega tu dominio/IP de EC2 aquí
+CSRF_TRUSTED_ORIGINS = os.environ.get(
+    'CSRF_TRUSTED_ORIGINS',
+    'http://localhost:8000,http://127.0.0.1:8000'
+).split(',')
 
 # CORS configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://192.168.68.55:8000",
-    "http://10.79.15.38:8000",
-]
+# Agrega tu dominio/IP de EC2 y dirección IP pública aquí
+CORS_ALLOWED_ORIGINS = os.environ.get(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000'
+).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False  # Mantener en False en producción
 
 # Biometric authentication settings
 FACE_RECOGNITION_THRESHOLD = 0.6  # Umbral de confianza para reconocimiento facial
