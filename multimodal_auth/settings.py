@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     # Local apps
     'app.users',
     'app.face_recognition',
+    'app.voice_recognition',
     'channels',
 ]
 
@@ -162,7 +163,10 @@ AUTH_USER_MODEL = 'users.User'
 
 # REST Framework configuration
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
