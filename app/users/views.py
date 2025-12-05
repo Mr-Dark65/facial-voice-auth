@@ -94,7 +94,22 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         return UserSerializer
     
     def get_object(self):
-        return self.request.user
+        user = self.request.user
+        
+        # Sincronizar contadores de datos biométricos
+        from app.face_recognition.models import FaceImage
+        from app.voice_recognition.models import VoiceSample
+        
+        face_count = FaceImage.objects.filter(user=user).count()
+        voice_count = VoiceSample.objects.filter(user=user).count()
+        
+        # Actualizar si han cambiado
+        if user.face_images_count != face_count or user.voice_samples_count != voice_count:
+            user.face_images_count = face_count
+            user.voice_samples_count = voice_count
+            user.save(update_fields=['face_images_count', 'voice_samples_count'])
+        
+        return user
     
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
