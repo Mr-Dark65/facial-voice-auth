@@ -614,3 +614,83 @@ class ModelListView(generics.ListAPIView):
     queryset = FaceRecognitionModel.objects.all()
     serializer_class = FaceRecognitionModelSerializer
     permission_classes = [permissions.IsAdminUser]
+
+
+class TrainFaceModelView(APIView):
+    """
+    Vista para entrenar el modelo de reconocimiento facial.
+    POST /api/face/train/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        try:
+            logger.info("Iniciando entrenamiento de modelo facial")
+            
+            # Verificar que hay suficientes usuarios con datos
+            users_with_faces = User.objects.filter(face_registered=True).count()
+            if users_with_faces < 2:
+                return Response({
+                    'error': 'Se necesitan al menos 2 usuarios con rostros registrados'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Iniciar entrenamiento
+            trainer = FaceRecognitionTrainer()
+            dataset_manager = FaceDatasetManager()
+            
+            # Preparar datos
+            logger.info("Preparando datos de entrenamiento")
+            X_train, y_train, label_mapping = dataset_manager.prepare_training_data(
+                min_images_per_user=3
+            )
+            
+            if len(X_train) < 10:
+                return Response({
+                    'error': f'Datos insuficientes para entrenar. Se encontraron {len(X_train)} imágenes, se necesitan al menos 10'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Entrenar modelo
+            logger.info(f"Entrenando con {len(X_train)} imágenes de {len(label_mapping)} usuarios")
+            history, model_path = trainer.train(
+                X_train=X_train,
+                y_train=y_train,
+                label_mapping=label_mapping,
+                epochs=30,
+                batch_size=16
+            )
+            
+            # Guardar información del modelo en BD
+            model_record = FaceRecognitionModel.objects.create(
+                name=f"face_model_{timezone.now().strftime('%Y%m%d_%H%M%S')}",
+                model_path=model_path,
+                accuracy=history.history.get('val_accuracy', [0])[-1] if 'val_accuracy' in history.history else 0,
+                num_classes=len(label_mapping),
+                training_samples=len(X_train),
+                is_active=True
+            )
+            
+            # Desactivar modelos anteriores
+            FaceRecognitionModel.objects.filter(is_active=True).exclude(id=model_record.id).update(is_active=False)
+            
+            logger.info(f"Modelo entrenado exitosamente: {model_record.name}")
+            
+            return Response({
+                'message': 'Modelo facial entrenado exitosamente',
+                'model_id': model_record.id,
+                'model_name': model_record.name,
+                'accuracy': model_record.accuracy,
+                'num_classes': model_record.num_classes,
+                'training_samples': model_record.training_samples,
+                'history': {
+                    'loss': history.history.get('loss', []),
+                    'accuracy': history.history.get('accuracy', []),
+                    'val_loss': history.history.get('val_loss', []),
+                    'val_accuracy': history.history.get('val_accuracy', [])
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            logger.error(f"Error entrenando modelo facial: {str(e)}")
+            return Response({
+                'error': f'Error entrenando modelo: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
